@@ -102,8 +102,29 @@ export function resolveRecommendationItems() {
 
 export function resolveRecRoots() {
     const roots = [];
-    const gtmZoneUl = document.querySelector(REC_ZONE_SELECTOR);
-    if (gtmZoneUl) roots.push(gtmZoneUl);
+
+    const gtmZoneRoots = Array.from(document.querySelectorAll(REC_ZONE_SELECTOR));
+    const headingRoot = findRecommendationRootByHeading();
+    const zoneCandidates =
+        gtmZoneRoots.length > 0
+            ? gtmZoneRoots
+            : [
+                  ...Array.from(
+                      document.querySelectorAll(REC_CONTAINER_FALLBACK_SELECTORS.join(", "))
+                  ),
+                  ...(headingRoot ? [headingRoot] : []),
+              ];
+
+    for (const candidate of zoneCandidates) {
+        if (candidate?.querySelector('a[href*="/artworks/"]')) {
+            roots.push(candidate);
+            break;
+        }
+    }
+    if (roots.length === 0 && zoneCandidates.length > 0) {
+        roots.push(zoneCandidates[0]);
+    }
+
     const sidebarLink = document.querySelector(REC_SIDEBAR_OTHER_WORKS_NAV);
     const sidebarNav = sidebarLink?.closest("nav");
     if (sidebarNav) roots.push(sidebarNav);

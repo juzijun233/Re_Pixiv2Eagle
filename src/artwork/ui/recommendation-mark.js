@@ -4,7 +4,6 @@ import { dbg, err, warn } from "../../tampermonkey/logger.js";
 import { subscribe } from "../../tampermonkey/settings-api.js";
 import { gmFetch } from "../../tampermonkey/request.js";
 import {
-    REC_ZONE_SELECTOR,
     REC_THUMBNAIL_LINK_SELECTOR,
     REC_USER_NAME_LINK_SELECTOR,
     REC_SIDEBAR_OTHER_WORKS_NAV,
@@ -33,7 +32,10 @@ import { getFilterRecSavedMode } from "../../tampermonkey/setting.js";
 
 const TYPE_FOLDER_DESCRIPTIONS = ["illustrations", "manga", "novels"];
 
-const FALLBACK_SCAN_INTERVAL = 30000;
+const FALLBACK_SCAN_INTERVAL = 10000;
+const FALLBACK_INITIAL_DELAY_MS = 3000;
+const ROOT_RETRY_INTERVAL_MS = 5000;
+const ROOT_RETRY_DEADLINE_MS = 60000;
 const PENDING_RETRY_INTERVAL = 200;
 const PENDING_MAX_RETRIES = 10; // 10 × 200ms ≈ 2s 窗口
 const LIFECYCLE_MS = 5 * 60 * 1000;
@@ -49,6 +51,8 @@ let recIntersectionObserver = null;
 let fallbackScanTimer = null;
 let pendingTimer = null;
 let lifecycleTimer = null;
+let firstFallbackTimer = null;
+let lifecycleRearmObserver = null;
 let recActive = false;
 
 let currentPageArtistUid = null;
@@ -77,9 +81,19 @@ async function resolveCurrentPageArtistUid(artworkPid) {
     return null;
 }
 
+function reapplySavedFilterForCheckedItems(zoneRoot) {
+    if (!zoneRoot) return;
+    zoneRoot.querySelectorAll("li").forEach((li) => {
+        if (li.dataset.eagleChecked && li.dataset.p2eSavedFiltered === "1") {
+            applySavedFilter(li, { isSaved: true });
+        }
+    });
+}
+
 function onFilterSettingsChange() {
     if (!recZoneRoot) return;
     rescanZoneAuthorFilter(recZoneRoot, getFilterContext());
+    reapplySavedFilterForCheckedItems(recZoneRoot);
 }
 
 function onSavedFilterSettingsChange(processLi) {
@@ -190,7 +204,8 @@ export function handleSavedEventForRecommendation(payload) {
     if (!id) return;
 
     const roots = resolveRecRoots();
-    const zoneRoot = recZoneRoot || roots.find((r) => r.matches(REC_ZONE_SELECTOR));
+    const zoneRoot =
+        recZoneRoot || roots.find((r) => !(r.tagName === "NAV" && r.closest("aside")));
 
     const li = zoneRoot ? findRecLiByPid(id, zoneRoot) : null;
     if (li) {
@@ -232,9 +247,17 @@ function cleanupRecMarking() {
         recIntersectionObserver.disconnect();
         recIntersectionObserver = null;
     }
+    if (lifecycleRearmObserver) {
+        lifecycleRearmObserver.disconnect();
+        lifecycleRearmObserver = null;
+    }
     if (fallbackScanTimer) {
         clearInterval(fallbackScanTimer);
         fallbackScanTimer = null;
+    }
+    if (firstFallbackTimer) {
+        clearTimeout(firstFallbackTimer);
+        firstFallbackTimer = null;
     }
     if (pendingTimer) {
         clearInterval(pendingTimer);
@@ -245,6 +268,30 @@ function cleanupRecMarking() {
         lifecycleTimer = null;
     }
     recActive = false;
+}
+
+/**
+ * lifecycle 超时 cleanup 后：zone 滚入视口时重新初始化推荐区标记。
+ * @param {Element | null} zoneRoot
+ */
+function armLifecycleRearm(zoneRoot) {
+    if (!zoneRoot?.isConnected) return;
+    if (lifecycleRearmObserver) {
+        lifecycleRearmObserver.disconnect();
+        lifecycleRearmObserver = null;
+    }
+    lifecycleRearmObserver = new IntersectionObserver((entries, io) => {
+        for (const entry of entries) {
+            if (entry.intersectionRatio <= 0) continue;
+            io.disconnect();
+            lifecycleRearmObserver = null;
+            dbg("推荐区：lifecycle 后滚入视口，重新 markSavedInRecommendationArea");
+            markSavedInRecommendationArea();
+            break;
+        }
+    });
+    lifecycleRearmObserver.observe(zoneRoot);
+    dbg("推荐区：lifecycle re-arm IO 已挂载");
 }
 
 // 在推荐区域标记已保存作品（双 root scoped 增量模式）
@@ -286,14 +333,7 @@ export async function markSavedInRecommendationArea() {
         currentArtworkPid = currentPid ?? null;
         currentPageArtistUid = null;
 
-        resolveCurrentPageArtistUid(currentArtworkPid).then((uid) => {
-            if (isStale()) return;
-            currentPageArtistUid = uid;
-            dbg(`推荐区：当前页画师 uid = ${uid ?? "(未解析)"}`);
-            if (recZoneRoot) {
-                rescanZoneAuthorFilter(recZoneRoot, getFilterContext());
-            }
-        });
+        const artistUidPromise = resolveCurrentPageArtistUid(currentArtworkPid);
 
         const pending = new Map(); // node -> { count, kind: 'zone'|'sidebar' }
 
@@ -424,7 +464,13 @@ export async function markSavedInRecommendationArea() {
                 ?.querySelector('a[href*="/users/"]')
                 ?.getAttribute("href")
                 ?.match(/\/users\/(\d+)/);
-            return m2 ? m2[1] : null;
+            if (m2) return m2[1];
+            const m3 = a.closest("aside")
+                ?.querySelector('a[href*="/users/"]')
+                ?.getAttribute("href")
+                ?.match(/\/users\/(\d+)/);
+            if (m3) return m3[1];
+            return currentPageArtistUid || null;
         };
 
         const processSidebarLink = async (a) => {
@@ -499,6 +545,24 @@ export async function markSavedInRecommendationArea() {
             pending.delete(a);
         };
 
+        artistUidPromise.then((uid) => {
+            if (isStale()) return;
+            currentPageArtistUid = uid;
+            dbg(`推荐区：当前页画师 uid = ${uid ?? "(未解析)"}`);
+            if (recZoneRoot) {
+                rescanZoneAuthorFilter(recZoneRoot, getFilterContext());
+                reapplySavedFilterForCheckedItems(recZoneRoot);
+            }
+            if (!uid) return;
+            const links = sidebarNav
+                ? sidebarNav.querySelectorAll('a[href*="/artworks/"]')
+                : document.querySelectorAll(REC_SIDEBAR_OTHER_WORKS_NAV);
+            links.forEach((a) => {
+                delete a.dataset.eagleChecked;
+                processSidebarLink(a);
+            });
+        });
+
         const processNode = (node, kind) =>
             kind === "zone" ? processLi(node) : processSidebarLink(node);
 
@@ -542,28 +606,9 @@ export async function markSavedInRecommendationArea() {
             recObservers.push(obs);
         };
 
-        // ---- zone 首扫（IntersectionObserver 延迟到进视口） ----
+        // ---- zone 首扫 ----
         const initialScanZone = (zoneRoot) => {
             zoneRoot.querySelectorAll("li").forEach((li) => processLi(li));
-        };
-        const observeZoneVisibility = (zoneRoot) => {
-            recIntersectionObserver = new IntersectionObserver((entries, io) => {
-                for (const entry of entries) {
-                    if (entry.intersectionRatio > 0) {
-                        io.unobserve(entry.target);
-                        if (recIntersectionObserver) {
-                            recIntersectionObserver.disconnect();
-                            recIntersectionObserver = null;
-                        }
-                        if (!isStale()) {
-                            dbg("推荐区：zone 进入视口，首扫");
-                            initialScanZone(zoneRoot);
-                        }
-                        break;
-                    }
-                }
-            });
-            recIntersectionObserver.observe(zoneRoot);
         };
 
         // ---- sidebar 首扫（首屏即在 DOM，无需 IntersectionObserver） ----
@@ -571,7 +616,7 @@ export async function markSavedInRecommendationArea() {
             nav.querySelectorAll('a[href*="/artworks/"]').forEach((a) => processSidebarLink(a));
         };
 
-        // ---- 30s 兜底 diff（仅处理未 eagleChecked 项；不再每轮清全量） ----
+        // ---- 10s 兜底 diff（仅处理未 eagleChecked 项；不再每轮清全量） ----
         const fallbackScan = async () => {
             if (isStale()) return;
             if (!window.__pixiv2eagle_globalEagleIndex) {
@@ -582,7 +627,13 @@ export async function markSavedInRecommendationArea() {
             }
             resolveRecommendationItems().forEach((li) => {
                 applyAuthorFilter(li, getFilterContext());
-                if (!li.dataset.eagleChecked) processLi(li);
+                if (li.dataset.eagleChecked) {
+                    if (li.dataset.p2eSavedFiltered === "1") {
+                        applySavedFilter(li, { isSaved: true });
+                    }
+                } else {
+                    processLi(li);
+                }
             });
             document.querySelectorAll(REC_SIDEBAR_OTHER_WORKS_NAV).forEach((a) => {
                 if (!a.dataset.eagleChecked) processSidebarLink(a);
@@ -607,16 +658,17 @@ export async function markSavedInRecommendationArea() {
         // ---- 解析 root 并绑定 ----
         const bindRoots = (roots) => {
             for (const root of roots) {
-                if (root.matches(REC_ZONE_SELECTOR)) {
+                if (root.tagName === "NAV" && root.closest("aside")) {
+                    sidebarNav = root;
+                } else {
                     zoneUl = root;
                     recZoneRoot = root;
-                } else {
-                    sidebarNav = root;
                 }
             }
             if (zoneUl) {
                 observeRoot(zoneUl, "zone");
-                observeZoneVisibility(zoneUl);
+                dbg("推荐区：bind 后立即 zone 首扫");
+                initialScanZone(zoneUl);
             }
             if (sidebarNav) {
                 observeRoot(sidebarNav, "sidebar");
@@ -624,17 +676,24 @@ export async function markSavedInRecommendationArea() {
             }
         };
 
+        const rootRetryDeadline = Date.now() + ROOT_RETRY_DEADLINE_MS;
         let roots = resolveRecRoots();
 
-        // root 为空：单次等待后重试 resolve（不 fallback body）
+        // root 为空：首次 10s wait，之后 60s 窗口内每 5s 重试 resolveRecRoots
         if (roots.length === 0) {
-            warn("推荐区：未找到 zone / sidebar root，等待后重试一次");
+            warn("推荐区：未找到 zone / sidebar root，等待 10s 后重试");
             await waitForRecommendationItems({ timeout: 10000 });
             if (isStale()) return;
             roots = resolveRecRoots();
         }
+        while (roots.length === 0 && Date.now() < rootRetryDeadline) {
+            warn("推荐区：root 仍为空，5s 后再次 resolveRecRoots");
+            await new Promise((resolve) => setTimeout(resolve, ROOT_RETRY_INTERVAL_MS));
+            if (isStale()) return;
+            roots = resolveRecRoots();
+        }
         if (roots.length === 0) {
-            warn("推荐区：重试后仍无 root，放弃本次（依赖下次路由触发）");
+            warn("推荐区：60s 内仍未找到 root，放弃本次（依赖下次路由触发）");
             return;
         }
 
@@ -651,13 +710,23 @@ export async function markSavedInRecommendationArea() {
         settingsUnsub = subscribe(onRecommendationSettingsChange);
         if (currentPageArtistUid && recZoneRoot) {
             rescanZoneAuthorFilter(recZoneRoot, getFilterContext());
+            reapplySavedFilterForCheckedItems(recZoneRoot);
         }
 
         pendingTimer = setInterval(pendingRetry, PENDING_RETRY_INTERVAL);
         fallbackScanTimer = setInterval(fallbackScan, FALLBACK_SCAN_INTERVAL);
+        firstFallbackTimer = setTimeout(() => {
+            firstFallbackTimer = null;
+            if (!isStale()) {
+                dbg("推荐区：bind 后 3s 首次 fallbackScan");
+                fallbackScan();
+            }
+        }, FALLBACK_INITIAL_DELAY_MS);
         lifecycleTimer = setTimeout(() => {
-            dbg("推荐区：5min 生命周期到，断开监控");
+            dbg("推荐区：5min 生命周期到，断开监控并 re-arm IO");
+            const zoneForRearm = recZoneRoot;
             cleanupRecMarking();
+            armLifecycleRearm(zoneForRearm);
         }, LIFECYCLE_MS);
         recActive = true;
     } catch (error) {

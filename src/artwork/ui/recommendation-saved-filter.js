@@ -70,6 +70,12 @@ export function applySavedFilter(li, { isSaved }) {
         li.dataset.p2eSavedFiltered === "1" &&
         li.dataset.p2eSavedFilterMode === mode
     ) {
+        // dataset 与 DOM 可能不同步：clearFilterState 会清空 display 但不改 saved dataset
+        if (mode === "hide" && li.style.display !== "none") {
+            applyHideMode(li);
+        } else if (mode === "blur" && !li.querySelector(`.${SAVED_BLUR_OVERLAY_CLASS}`)) {
+            applyBlurMode(li);
+        }
         return;
     }
 

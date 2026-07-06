@@ -20,7 +20,12 @@ const OVERLAY_CLASS = "p2e-rec-author-blur-overlay";
  */
 export function clearFilterState(li) {
     if (!li || li.nodeType !== 1) return;
-    li.style.display = "";
+    const savedOwnsDisplay =
+        li.dataset.p2eSavedFiltered === "1" &&
+        li.dataset.p2eSavedFilterMode === "hide";
+    if (!savedOwnsDisplay) {
+        li.style.display = "";
+    }
     removeBlurOverlay(li, OVERLAY_CLASS);
     if (li.dataset.p2eAuthorFilterPositionSet === "1") {
         li.style.position = "";
