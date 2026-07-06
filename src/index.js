@@ -13,6 +13,7 @@ import { markSavedInRecommendationArea } from "./artwork/ui/recommendation-mark.
 import { addNovelButton } from "./novel/ui/save-button.js";
 import { markSavedInNovelSeries } from "./novel/series/marking.js";
 import { debouncedMarkSavedInArtistList } from "./artist-list/marking.js";
+import { bindArtistIllustListPageBatchSave } from "./artist-list/batch-save-page.js";
 import { initSavedEventBus } from "./shared/marking/saved-event-bus.js";
 
 registerMenuCommands();
@@ -26,6 +27,7 @@ const monitorConfig = createMonitorConfig({
     addNovelButton,
     markSavedInNovelSeries,
     debouncedMarkSavedInArtistList,
+    bindArtistIllustListPageBatchSave,
 });
 
 try {

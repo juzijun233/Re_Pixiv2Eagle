@@ -29,7 +29,10 @@ export function createMonitorConfig(handlers) {
         {
             urlSuffix: "/user",
             observeID: null,
-            handler: handlers.debouncedMarkSavedInArtistList,
+            handler: () => {
+                handlers.debouncedMarkSavedInArtistList();
+                handlers.bindArtistIllustListPageBatchSave();
+            },
         },
     ];
 }

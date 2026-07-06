@@ -25,3 +25,12 @@ export const THUMBNAIL_CONTAINER_FALLBACK_SELECTORS = [
     "div.sc-f44a0b30-9.cvPXKv",
     "div.sc-f44a0b30-9",
 ];
+
+// Tier 3 — 插画列表页「作品」标题栏黑色区域（2026-07 观测）
+export const ARTIST_ILLUST_LIST_HEADER_SELECTOR = "div.sc-a5c26f85-2.gZRUQr";
+export const ARTIST_ILLUST_LIST_HEADER_PARTIAL_SELECTOR = "div.sc-a5c26f85-2";
+
+// 结构 fallback：含「作品/Illustrations」标签的 header 区域（Pixiv 改版兜底）
+export const ARTIST_ILLUST_LIST_HEADER_FALLBACK_SELECTORS = [
+    "div.sc-a5c26f85-2",
+];

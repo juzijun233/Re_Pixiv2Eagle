@@ -7,8 +7,7 @@ import {
     waitForListContainer,
     resolveThumbnailAnchor,
 } from "../shared/marking/resolve-thumbnail-anchor.js";
-import { findArtistFolder } from "../eagle/artist.js";
-import { getAllEagleItemsInFolder } from "../eagle/items.js";
+import { buildArtistListSavedContext } from "./saved-context.js";
 import { enrichMarkingContextForMangaSeriesPage } from "../manga/series/marking.js";
 
 let markSavedDebounceTimer = null;
@@ -109,49 +108,19 @@ export async function markSavedInArtistList() {
         log("解析到 artistId:", artistId);
 
         const pixivFolderId = getFolderId();
-        const artistFolder = await findArtistFolder(pixivFolderId, artistId);
-        if (!artistFolder) {
+        const savedContext = await buildArtistListSavedContext(artistId, pixivFolderId);
+        if (!savedContext) {
             log("未找到对应的画师文件夹，跳过标注（pixivFolderId:", pixivFolderId, "）");
             return;
         }
 
-        log("找到画师文件夹", artistFolder.id, "名称:", artistFolder.name, "开始拉取 items");
-        const items = await getAllEagleItemsInFolder(artistFolder.id);
-
-        // 如果开启了按类型保存，还需要拉取类型文件夹中的 items
-        if (artistFolder.children) {
-            const typeFolders = artistFolder.children.filter((c) =>
-                ["illustrations", "manga", "novels"].includes(c.description)
-            );
-            for (const tf of typeFolders) {
-                const typeItems = await getAllEagleItemsInFolder(tf.id);
-                if (typeItems && typeItems.length) {
-                    items.push(...typeItems);
-                }
-            }
-        }
-
-        const urlSet = new Set((items || []).map((it) => it.url));
-        log("画师文件夹(含类型子文件夹)中 items 数量:", items ? items.length : 0);
-
-        // 依据规则：
-        // - 画师文件夹的 description 中含有 `pid = {artistId}` 用于识别画师（见 findArtistFolder）
-        // - 单个作品的子文件夹的 description 等于作品 ID（作品 pid）
-        // 因此除了比对 item.url，还需要检查 artistFolder 及其子文件夹的 description 是否等于 artworkId
-        const folderDescSet = new Set();
-        const folderDescMap = {}; // desc -> folderId
-        (function collectFolderDescriptions(folder) {
-            if (!folder || !folder.children) return;
-            for (const child of folder.children) {
-                const desc = (child.description || "").trim();
-                if (desc) {
-                    folderDescSet.add(desc);
-                    folderDescMap[desc] = child.id;
-                }
-                if (child.children && child.children.length) collectFolderDescriptions(child);
-            }
-        })(artistFolder);
-        log("已收集到的子文件夹描述数量:", folderDescSet.size);
+        const { urlSet, folderDescSet, folderDescMap } = savedContext;
+        log(
+            "已构建已保存上下文：items url 数量",
+            urlSet.size,
+            "子文件夹描述数量",
+            folderDescSet.size
+        );
 
         // 如果是系列页面，优先查找系列文件夹并在该文件夹下递归寻找 item/url 与子文件夹描述（备注为 pid）
         if (location.pathname.includes("/series/")) {
