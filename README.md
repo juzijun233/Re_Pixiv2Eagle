@@ -1,159 +1,198 @@
 # Re_Pixiv2Eagle
 
-[https://github.com/juzijun233/Re_Pixiv2Eagle](https://github.com/juzijun233/Re_Pixiv2Eagle)
+[English](./README.en.md) · [中文](./README.md)
 
-基于上游 [Pixiv2Eagle](https://github.com/nekoday/Pixiv2Eagle) 的重构分支。本仓库使用 **esbuild** 将 `src/` 下的 ES 模块打包为单文件用户脚本 `dist/RePixiv2Eagle.js`，可直接导入 Tampermonkey。
+基于上游 [Pixiv2Eagle](https://github.com/nekoday/Pixiv2Eagle) 的重构分支。本仓库使用 **esbuild** 将 `src/` 下的 ES 模块打包为单文件用户脚本 `dist/RePixiv2Eagle.js`，可直接导入 Tampermonkey。当前版本：**3.5.1**（见 [`src/header.txt`](src/header.txt)）。
 
 > ✨ **新增：** 支持将 Pixiv 动图（ugoira）转换为 GIF 并保存到 Eagle。
 >
 > **转换可能需要一些时间，请耐心等待。**
 
-一个用于将 Pixiv 艺术作品保存到 Eagle 图片管理软件的 Tampermonkey（油猴）脚本。
+一个用于将 Pixiv 插画、漫画、小说保存到 [Eagle](https://eagle.cool/) 图片管理软件的 Tampermonkey（油猴）脚本。
+
+## 快速开始
+
+### 安装要求
+
+1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 浏览器扩展
+2. 安装 [Eagle](https://eagle.cool/) 并确保客户端正在运行（监听 `http://localhost:41595`）
+
+### 安装脚本
+
+**推荐：** 从 [GitHub Releases](https://github.com/juzijun233/Re_Pixiv2Eagle/releases) 下载 `RePixiv2Eagle.js`，在 Tampermonkey 中新建脚本并粘贴全部内容，或以本地文件方式导入。
+
+> 若尚无 Release，请使用下方「开发者 build」方式自行构建；Releases 页面会在后续版本发布时提供预构建脚本。
+
+**开发者备选：**
+
+```bash
+git clone https://github.com/juzijun233/Re_Pixiv2Eagle.git
+cd Re_Pixiv2Eagle
+npm install
+npm run build
+```
+
+将生成的 `dist/RePixiv2Eagle.js` 导入 Tampermonkey。
+
+### 首次配置
+
+1. 在 Eagle 中创建用于存放 Pixiv 作品的文件夹，右键选择「复制链接」
+2. 打开任意 Pixiv 页面，点击右下角 **⚙️** 浮动按钮，或在 Tampermonkey 菜单选择 **「⚙️ 打开控制面板」**
+3. 在 **Eagle 与文件夹** 分区粘贴文件夹链接（如 `http://localhost:41595/folder?id=XXXXXX`）或仅输入 ID（`XXXXXX` 部分），点击「应用」
 
 ## 功能特点
 
-- 🖼️ 一键保存 Pixiv 作品到 Eagle
-- 📁 自动创建画师专属文件夹
-- 🏷️ 保留作品标签和元数据
-- 📄 支持多页作品保存
-- 🗂️ 可选为多页作品创建子文件夹
-- 📝 可选保存作品描述到 Eagle 注释
-- ⏰ 可选使用作品投稿时间作为添加日期
-- 🔍 可选自动检测当前作品是否已保存，并可一键打开已保存作品
-- 🔧 可配置 Pixiv 文件夹 ID
-- 🐛 支持调试模式
-- 🧪（实验功能）通过自定义模板设置画师文件夹名称
+### 插画 / 动图
 
-## 安装要求
+- 作品详情页一键保存到 Eagle，保留标题、标签与元数据
+- 支持多页插画批量下载
+- 动图（ugoira）自动转换为 GIF 后保存
 
-1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 浏览器扩展
-2. 安装 [Eagle](https://eagle.cool/) 图片管理软件
-3. 确保 Eagle 软件正在运行
+### 漫画
 
-## 安装
+- 漫画系列文件夹自动创建与识别
+- 系列页面已保存标记
+- 系列页「更新序号」按钮，按 Pixiv 章节顺序整理 Eagle 内文件名
 
-1. 克隆本仓库并运行 `npm install`。
-2. 运行 `npm run build` 生成 `dist/RePixiv2Eagle.js`。
-3. 打开 Tampermonkey → 新建脚本 → 粘贴 `dist/RePixiv2Eagle.js` 全部内容，或直接以本地文件方式导入。
-4. 需配合 [Eagle](https://eagle.cool/) 客户端（监听 `http://localhost:41595`）。
+### 小说
 
-## 使用方法
+- 小说详情页（`/novel/show.php`）一键保存
+- 支持 TXT、Markdown、EPUB 三种格式
+- 小说系列页面已保存标记
 
-### 首次使用设置
+### Eagle 组织
 
-1. 启动 Eagle 软件
-2. 在 Eagle 中创建一个用于存储 Pixiv 作品的文件夹
-3. 在 Eagle 中右键点击该文件夹，选择「复制链接」
-4. 在 Pixiv 作品页面，点击 Tampermonkey 图标
-5. 选择「设置 Pixiv 文件夹 ID」，粘贴复制的文件夹链接（例如 `http://localhost:41595/folder?id=XXXXXX`）或直接输入文件夹 ID（`XXXXXX` 部分）
-6. 点击「确定」保存设置
+- 自动创建画师专属文件夹（可自定义名称模板）
+- 可选按插画 / 漫画 / 小说分类型子文件夹
+- 漫画系列文件夹、作品子文件夹层级管理
+- 可配置 Pixiv 根文件夹 ID
 
-### 日常使用
+### 已保存感知
 
-1. 确保 Eagle 软件已启动
-2. 访问任意 Pixiv 作品页面（`/artworks/xxxxx`）
-3. 点击页面上的「保存到 Eagle」按钮即可将作品保存到指定文件夹
+- 详情页自动检测是否已保存（可选）
+- 推荐区、作者列表、系列页等多处已保存标记
+- 标记状态跨页面联动更新
 
-### 文件夹 ID 设置规则
+### 体验
 
-- 如果设置了 Pixiv 文件夹 ID：
-  - 脚本会在指定的 Pixiv 文件夹下查找或创建画师专属文件夹
-  - 如果找不到指定的 Pixiv 文件夹，会提示错误
-- 如果清空文件夹 ID：
-  - 脚本会在 Eagle 根目录下查找或创建画师专属文件夹
-  - 清空时会提示「已清空文件夹 ID，将默认在根目录创建画师文件夹」
+- 网页内控制面板（FAB ⚙️），集中管理全部设置
+- 保存进度 toast 提示
+- 浅色 / 深色 / 跟随系统主题
+- 配置导入 / 导出（Base64）
 
-### 画师文件夹名称模板设置规则
+### 高级
+
+- 可选使用 Pixiv 投稿时间作为 Eagle 添加日期
+- 可选将作品描述写入 Eagle 条目
+- 画师文件夹名称模板（`$uid` / `$name`）
+- Eagle 落盘等待超时、调试模式
+
+## 使用方法（按内容类型）
+
+| 页面 | 功能 |
+| ------ | ------ |
+| `/artworks/{id}` | 「保存到 Eagle」按钮；推荐区已保存标记 |
+| `/users/{id}/series/{id}` 等漫画系列页 | 系列已保存标记；「更新序号」整理章节文件名 |
+| `/novel/show.php?id={id}` | 小说保存按钮 |
+| `/novel/series/{id}` | 小说系列已保存标记 |
+| `/users/{id}`、`/user/{id}` 及作品列表页 | 作者列表已保存标记 |
+
+日常使用：确保 Eagle 已启动 → 访问对应 Pixiv 页面 → 点击保存按钮或查看已保存标记。
+
+## 控制面板
+
+Pixiv 页面右下角 **⚙️** 或 Tampermonkey 菜单 **「⚙️ 打开控制面板」** 打开。分区如下：
+
+| 分区 | 主要设置 |
+| ------ | ---------- |
+| **Eagle 与文件夹** | Pixiv 根文件夹 ID |
+| **插画 / 漫画保存** | 投稿时间、保存描述、按类型保存、自动检测已保存、多页子文件夹（关闭 / 仅多页 / 始终） |
+| **小说** | 保存路径、格式（TXT / MD / EPUB） |
+| **推荐区** | 同作者过滤、已保存条目显示方式（标记 / 模糊 / 隐藏） |
+| **外观** | 界面主题（浅色 / 深色 / 跟随系统） |
+| **高级** | 画师文件夹名称模板、Eagle 落盘等待超时 |
+| **配置备份** | Base64 导出 / 导入全部可导出设置 |
+| **快捷操作** | 保存当前作品、强制更新 Eagle 索引 |
+
+Tampermonkey 菜单仅保留三项：**打开控制面板**、**强制更新 Eagle 索引**、**切换：调试模式**。其余设置均在控制面板中完成。
+
+## 画师文件夹
+
+- 每个画师在配置的 Pixiv 文件夹（或 Eagle 根目录）下拥有专属文件夹
+- 文件夹描述含 `pid = 画师ID`，用于识别与匹配
+- 实现逻辑：
+  1. 在 Pixiv 主文件夹下查找是否已有该画师文件夹
+  2. 通过描述中的 `pid = 画师ID` 识别
+  3. 不存在则自动创建，并写入画师名称与 ID 描述
+  4. 作品保存在对应画师文件夹（及可选的类型 / 系列子文件夹）中
+
+### 文件夹 ID 规则
+
+- **已设置 ID：** 在指定 Pixiv 文件夹下查找或创建画师文件夹；找不到指定文件夹时报错
+- **清空 ID：** 在 Eagle 根目录下查找或创建画师文件夹
+
+### 画师文件夹名称模板
 
 - `$uid` 表示画师 ID，`$name` 表示画师名称
-- 默认使用画师名称作为文件夹名称，对应模板为 `$name`
-- 自定义模板样例：`$uid_$name`
+- 默认模板为 `$name`；示例：`$uid_$name`
+- 在控制面板 **高级** 分区设置
 
-## 功能说明
+## 作品子文件夹
 
-### 保存作品
+- **系列文件夹：** 漫画系列在画师目录下创建系列文件夹，描述写入 Pixiv 系列 URL（如 `https://www.pixiv.net/user/{画师ID}/series/{系列ID}`），便于反查来源
+- **作品子文件夹：** 以作品标题命名，描述写入 **作品 ID**，用于已保存检测与定位
+- 漫画或属于 Pixiv 系列的作品会经系列文件夹再进入作品子文件夹
+- 其它插画可在控制面板 **插画 / 漫画保存** 中设置子文件夹模式：**关闭 → 仅多页 → 始终**
+  - **关闭：** 直接保存到画师 / 系列文件夹
+  - **仅多页：** `pageCount > 1` 时创建子文件夹
+  - **始终：** 所有插画、漫画、动图均创建子文件夹
 
-- 点击「保存到 Eagle」按钮后，脚本会自动：
-  - 获取作品信息（标题、作者、标签等）
-  - 检查/创建画师专属文件夹
-  - 下载并保存作品到 Eagle
-  - 在 Eagle 内保留作品信息
+## 与 Pixiv2Eagle 的差异
 
-### 画师文件夹
+本仓库为 [nekoday/Pixiv2Eagle](https://github.com/nekoday/Pixiv2Eagle) 的重构 fork，esbuild 模块化源码，并扩展了多项功能。
 
-- 每个画师都会在配置的 Pixiv 文件夹下创建专属文件夹
-- 文件夹名称使用画师名称
-- 文件夹描述中包含画师 ID，方便后续管理
-- 具体实现逻辑：
-  1. 首先检查 Pixiv 主文件夹下是否已存在该画师的专属文件夹
-  2. 通过文件夹描述中的 `pid = 画师ID` 来识别画师文件夹
-  3. 如果不存在，则自动创建新的画师文件夹
-  4. 新创建的文件夹会自动设置画师名称和包含画师 ID 的描述
-  5. 所有作品都会保存在对应画师的专属文件夹中
+**本 fork 新增（上游无或未同等实现）：**
 
-### 作品子文件夹
+- 网页控制面板与 FAB 入口，配置导入 / 导出
+- 动图 ugoira → GIF
+- 小说保存（TXT / MD / EPUB）与小说系列标记
+- 漫画系列标记、章节序号更新
+- 推荐区 / 作者列表已保存标记与过滤
+- 按类型分文件夹、保存进度 toast、界面主题
+- 已保存状态跨页面联动（BroadcastChannel + GM 存储）
 
-- 对于漫画作品（`illustType = 1`）或属于 Pixiv 系列的作品，脚本会先在画师目录下创建/定位对应的系列文件夹，并始终为作品建立一个以作品标题命名的子文件夹；子文件夹的描述会写入 Pixiv 系列 URL，方便在 Eagle 中反查来源。
-- 其它作品可以通过 Tampermonkey 菜单中的 `🗂️ 切换：为多页作品创建子文件夹` 在以下模式之间循环：**关闭 → 多页 → 始终**。
-  - 关闭：所有插画会直接保存到画师/系列文件夹中，不额外创建子文件夹
-  - 多页：当 Pixiv 返回的 `pageCount > 1` 时，才会以作品标题创建子文件夹
-  - 始终：无论插画、漫画还是动图（ugoira），都会创建子文件夹
-- 子文件夹会收纳同一作品的全部图片或 GIF，便于在 Eagle 中按 Pixiv 系列/章节浏览。
+**未继承上游的两项：**
 
-### 已保存作品检测与定位（可选）
-
-- 通过 Tampermonkey 菜单 `🔎 切换：自动检测作品保存状态` 控制开关。
-- 检测流程：获取当前作品信息 → 定位画师文件夹；如果作品属于系列，则进入对应系列文件夹，否则停留在画师文件夹。
-- 优先在当前文件夹内列出作品并比对作品链接；若未命中，再遍历该文件夹的子文件夹，子文件夹描述等于作品 ID 时视为该作品的保存位置。
-- 若检测到已保存，页面上的「保存到 Eagle」按钮会变为「已保存」，并出现「🔍」按钮。
-- 注意：作品数较多时可能导致性能问题。
-
-### 调试模式
-
-- 在 Tampermonkey 菜单中可以开启/关闭调试模式
-- 开启后可以查看详细的保存过程信息
-
-### 投稿时间设置
-
-- 在 Tampermonkey 菜单中可以开启/关闭使用投稿时间功能
-- 启用该功能后：
-  - Eagle 中的作品将使用 Pixiv 上的投稿时间作为添加日期
-  - 由于 Eagle 默认按照添加日期降序排列，作品展示顺序将与作者投稿顺序保持一致
-  - 适合希望按照作者投稿顺序查看作品的用户
-- 默认关闭，即使用实际保存时间作为添加日期
+- **直接保存** — 本 fork 未实现
+- **严格排序** — 本 fork 未实现
 
 ## 注意事项
 
 1. 使用前请确保 Eagle 软件已启动
-2. 需要正确配置 Pixiv 文件夹 ID
-3. 保存大文件或多页作品时可能需要较长时间，请耐心等待，下载速度主要取决于您的网络环境和 Pixiv 服务器响应速度
-4. 请遵守 Pixiv 的使用条款和版权规定
+2. 需要正确配置 Pixiv 文件夹 ID（或在根目录保存）
+3. 保存大文件、多页作品或 ugoira 转 GIF 可能需要较长时间，请耐心等待；速度取决于网络与 Pixiv 服务器
+4. 自动检测已保存状态时，作品数量较多可能影响页面性能
+5. 请遵守 Pixiv 的使用条款和版权规定
 
 ## 常见问题
 
 ### Q: 为什么保存按钮没有出现？
 
-A: 请确保：
-
-- Eagle 软件已启动
-- 已正确安装脚本
-- 页面能够完全加载
+请确保 Eagle 已启动、脚本已正确安装、页面已完全加载。可在控制面板 **快捷操作** 中尝试「保存当前作品」。
 
 ### Q: 如何获取文件夹 ID？
 
-A: 在 Eagle 中右键点击目标文件夹，选择「复制链接」，从链接中提取 ID 部分（链接格式为：`http://localhost:41595/folder?id=XXXXXX`）
+在 Eagle 中右键目标文件夹 →「复制链接」，从链接中提取 ID（格式：`http://localhost:41595/folder?id=XXXXXX`）。在控制面板 **Eagle 与文件夹** 分区粘贴并应用。
+
+### Q: 设置在哪里改？
+
+绝大部分设置在 Pixiv 页面控制面板（FAB ⚙️）中。Tampermonkey 菜单仅提供：打开控制面板、强制更新索引、调试模式。
 
 ### Q: 保存失败怎么办？
 
-A: 请检查：
+请检查 Eagle 是否运行、网络是否正常、文件夹 ID 是否正确；在控制面板或菜单开启调试模式，并查看浏览器控制台报错。
 
-- Eagle 是否正在运行
-- 网络连接是否正常
-- 是否已正确配置文件夹 ID
-- 开启调试模式查看详细信息
-- 查看浏览器控制台是否有报错信息
-
-如果按以上步骤检查后仍未解决问题，欢迎在 [GitHub Issues](https://github.com/juzijun233/Re_Pixiv2Eagle/issues) 提交 issue。
+若仍无法解决，欢迎在 [GitHub Issues](https://github.com/juzijun233/Re_Pixiv2Eagle/issues) 提交 issue。
 
 ## 免责声明
 
@@ -165,29 +204,32 @@ A: 请检查：
 
 ```bash
 npm install
-npm run dev    # 开发模式（esbuild --watch 自动重打包）
-npm run build  # 生产构建，输出 dist/RePixiv2Eagle.js
+npm run dev     # 开发模式（esbuild --watch）
+npm run build   # 生产构建 → dist/RePixiv2Eagle.js
+npm run release # 构建并复制到 Releases/{version}/
 ```
 
-源码为 `src/` 下的 ES 模块树，esbuild 以 `src/index.js` 为入口打包为单文件 IIFE；`src/header.txt` 为用户脚本元数据头，构建时作为 banner 注入产物。
+源码为 `src/` 下的 ES 模块树，esbuild 以 `src/index.js` 为入口打包为单文件 IIFE；`src/header.txt` 为用户脚本元数据头，构建时作为 banner 注入产物。各版本 CHANGELOG 位于 `Releases/{version}/CHANGELOG.md`（发行目录被 git 忽略，由 `npm run release` 本地生成）。
 
 ### 目录结构
 
-```
+```text
 src/
 ├── index.js          # bootstrap 入口
-├── header.txt        # 用户脚本元数据（@grant/@connect 等）
-├── tampermonkey/     # GM 封装与用户设置
+├── header.txt        # 用户脚本元数据
+├── tampermonkey/     # GM 封装、设置、菜单、日志
 ├── config/           # 常量、选择器、页面监控
 ├── routing/          # URL 路由与页面处理
-├── ui/               # 界面组件
-├── eagle/            # Eagle API 集成
+├── ui/               # 控制面板、toast、主题、按钮
+├── eagle/            # Eagle API、文件夹、索引
 ├── artwork/          # 插画与动图（ugoira）
 ├── manga/            # 漫画系列
 ├── novel/            # 小说
+├── artist-list/      # 作者列表标记
 └── shared/           # 跨域共享工具
 scripts/
-└── build.js          # esbuild 构建脚本
+├── build.js          # esbuild 构建
+└── release.js        # 发行打包
 dist/
 └── RePixiv2Eagle.js  # 构建产物（git 忽略）
 ```
@@ -195,8 +237,6 @@ dist/
 ## 许可证
 
 本项目采用 MIT 许可证。详细内容请查看 [LICENSE](LICENSE) 文件。
-
-### 许可证说明
 
 - 当前版本使用 MIT License
 - 作者保留在后续版本中更改许可证类型的权利

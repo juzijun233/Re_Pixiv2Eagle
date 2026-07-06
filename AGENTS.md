@@ -138,10 +138,13 @@ Skill 提供工作流与项目模式；领域细节仍以 `.cursor/rules/*.mdc` 
 - `docs/superpowers/` 等 Agent 工作流草稿不纳入版本库。
 - 发版：先改 `src/header.txt` 的 `@version`（及 CHANGELOG），再 `npm run release`；`@author` 中 `juzijun233` 居前。
 - 未明确要求时不主动 git commit 或 push。
+- 作为独立 fork 持续开发，不再向上游 nekoday/Pixiv2Eagle 提交贡献。
+- 希望防止代码被无许可植入闭源/商业软件；当前仍为 MIT，曾评估 GPL-3.0 等替代方案。
+- README 中英文双文件（`README.md` / `README.en.md`）；用户安装说明优先 GitHub Releases。
 
 ## Learned Workspace Facts
 
-- 仓库 fork 自 [nekoday/Pixiv2Eagle](https://github.com/nekoday/Pixiv2Eagle)；GitHub 地址为 `https://github.com/juzijun233/Re_Pixiv2Eagle`（仓库名带下划线）。
+- 仓库 fork 自 [nekoday/Pixiv2Eagle](https://github.com/nekoday/Pixiv2Eagle)；GitHub 为 `https://github.com/juzijun233/Re_Pixiv2Eagle`（仓库名带下划线）。`origin` 为 `git@github.com:juzijun233/Re_Pixiv2Eagle.git`，`upstream` 仍指向 nekoday。
 - 构建产物为 `dist/RePixiv2Eagle.js`；发行包为 `Releases/{version}/RePixiv2Eagle.js` + `CHANGELOG.md`（`Releases/` 已 git 忽略）。
 - Tampermonkey `@name` 当前为 `Re_Pixiv2Eagle`；文件名与用户可见脚本品牌倾向 `RePixiv2Eagle`（无下划线）。
 - 网页内设置 UI 在 `src/ui/control-panel/`（含 base64 配置导入/导出）；保存进度 toast 在 `src/ui/save-progress/`。
@@ -150,3 +153,6 @@ Skill 提供工作流与项目模式；领域细节仍以 `.cursor/rules/*.mdc` 
 - `tampermonkey/storage.js` 缓存 Eagle 索引；`tampermonkey/setting.js` 持久化用户设置。
 - `eagle/artist-matcher.js` 打破 artist↔folder 循环依赖。
 - UI 主题（浅色/深色/跟随系统）在 `src/ui/theme.js`，设置项经控制面板暴露。
+- `docs/TODO.md` 记录已批准 spec 外、非当前迭代的跟进项（如 recommendation-mark 死代码清理）。
+- 作者插画页单页批量保存在 `artist-list/batch-save-page.js` + `ui-batch-toolbar.js`（`bindArtistIllustListPageBatchSave`）；`saved-context.js` 与 marking 共享已保存判定；`saveArtworkById` 在 `artwork/save.js`；仅 `/users/{id}/illustrations`，与画师全量批量命名区分。
+- 推荐区「相关作品」监控在 `src/artwork/ui/recommendation-mark.js`：bind 后立即首扫、5min lifecycle cleanup + re-arm、root 60s 有限重试。
