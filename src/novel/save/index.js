@@ -13,6 +13,8 @@ import { checkEagle } from "../../eagle/client.js";
 import { createEagleFolder } from "../../eagle/folder.js";
 import { getArtistFolder } from "../../eagle/artist.js";
 import { getTypeFolderInfo, getOrCreateTypeFolder } from "../../eagle/type-folder.js";
+import { getAllEagleItemsInFolder } from "../../eagle/items.js";
+import { runSubmitThenPersistPipeline } from "../../eagle/save-pipeline.js";
 import { waitForFolderCountPersist } from "../../eagle/save-poller.js";
 import { blobToDataURL } from "../../artwork/ugoira/convert.js";
 import { getNovelId } from "../id.js";
@@ -239,22 +241,26 @@ export async function saveCurrentNovel() {
         const total = addOps.length;
         if (total > 0) {
             task.reportStage(SAVE_STAGE.UPLOADING, { current: 0, total });
-            for (let i = 0; i < total; i++) {
-                if (task.signal.aborted) {
-                    const abortErr = new Error("保存已取消");
-                    abortErr.name = "AbortError";
-                    throw abortErr;
-                }
-                await addOps[i]();
-                task.reportSubmitProgress({ current: i + 1, total });
-                await waitForFolderCountPersist({
-                    folderId: chapterFolderId,
-                    baselineCount: 0,
-                    target: i + 1,
-                    signal: task.signal,
-                    onProgress: (persisted) => task.reportEagleProgress({ current: Math.min(persisted, total), total }),
-                });
-            }
+
+            const baselineItems = await getAllEagleItemsInFolder(chapterFolderId);
+            const baselineCount = baselineItems.length;
+
+            await runSubmitThenPersistPipeline({
+                submits: addOps,
+                total,
+                baselineCount,
+                signal: task.signal,
+                onSubmitProgress: (p) => task.reportSubmitProgress(p),
+                onEagleProgress: (p) => task.reportEagleProgress(p),
+                waitForPersistMulti: ({ baselineCount: base, target, signal, onProgress }) =>
+                    waitForFolderCountPersist({
+                        folderId: chapterFolderId,
+                        baselineCount: base,
+                        target,
+                        signal,
+                        onProgress,
+                    }),
+            });
         }
 
         publishSaved({

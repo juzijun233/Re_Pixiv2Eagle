@@ -3,6 +3,8 @@
 import { getUseUploadDate, getSaveDescription } from "../tampermonkey/setting.js";
 import { err } from "../tampermonkey/logger.js";
 import { gmFetch } from "../tampermonkey/request.js";
+import { runSubmitThenPersistPipeline } from "./save-pipeline.js";
+import { waitForArtworkPersist, waitForFolderCountPersist } from "./save-poller.js";
 import {
     EAGLE_ITEM_LIST_LIMIT,
     EAGLE_ITEM_LIST_MAX_PAGES,
@@ -208,7 +210,7 @@ export async function saveToEagle(imageUrls, folderId, details, artworkId) {
 }
 
 /**
- * 逐张提交，每张提交成功后通过注入的 waitForPersist 等待落盘确认。
+ * 逐张提交插画到 Eagle，经 save-pipeline 解耦提交与落盘轮询。
  *
  * @param {string[]} imageUrls
  * @param {string} folderId
@@ -219,30 +221,16 @@ export async function saveToEagle(imageUrls, folderId, details, artworkId) {
  *   onEagleProgress?: (p: { current: number, total: number }) => void,
  *   signal?: AbortSignal,
  *   baselineCount?: number,
- *   waitForPersist?: (args: {
- *     pageIndex: number,
- *     pageTotal: number,
- *     baselineCount: number,
- *     signal?: AbortSignal,
- *     onEagleProgress?: (p: { current: number, total: number }) => void,
- *   }) => Promise<void>,
  * }} [options]
  */
 export async function saveToEagleSequential(imageUrls, folderId, details, artworkId, options = {}) {
-    const { onSubmitProgress, onEagleProgress, signal, baselineCount = 0, waitForPersist } = options;
+    const { onSubmitProgress, onEagleProgress, signal, baselineCount = 0 } = options;
     const total = imageUrls.length;
     if (total === 0) {
         throw new Error("无图片可上传");
     }
 
-    for (let i = 0; i < total; i++) {
-        if (signal?.aborted) {
-            const abortErr = new Error("保存已取消");
-            abortErr.name = "AbortError";
-            throw abortErr;
-        }
-
-        const url = imageUrls[i];
+    const submits = imageUrls.map((url, i) => async () => {
         const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -255,19 +243,37 @@ export async function saveToEagleSequential(imageUrls, folderId, details, artwor
         if (!data.status) {
             throw new Error(total > 1 ? `第 ${i + 1} 张提交失败` : "保存图片失败");
         }
+    });
 
-        onSubmitProgress?.({ current: i + 1, total });
-
-        if (waitForPersist) {
-            await waitForPersist({
-                pageIndex: i,
-                pageTotal: total,
-                baselineCount,
-                signal,
-                onEagleProgress,
-            });
-        }
-    }
+    await runSubmitThenPersistPipeline({
+        submits,
+        total,
+        baselineCount,
+        signal,
+        onSubmitProgress,
+        onEagleProgress,
+        waitForPersistSingle:
+            total === 1
+                ? ({ signal: sig, onProgress }) =>
+                      waitForArtworkPersist({
+                          artworkId,
+                          folderId,
+                          signal: sig,
+                          onProgress,
+                      })
+                : undefined,
+        waitForPersistMulti:
+            total > 1
+                ? ({ baselineCount: base, target, signal: sig, onProgress }) =>
+                      waitForFolderCountPersist({
+                          folderId,
+                          baselineCount: base,
+                          target,
+                          signal: sig,
+                          onProgress,
+                      })
+                : undefined,
+    });
 
     const { itemId } = await isArtworkSavedInEagle(artworkId, folderId);
     return { itemId };
