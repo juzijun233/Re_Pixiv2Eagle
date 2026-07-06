@@ -13,44 +13,73 @@ import { getArtistFolder } from "../eagle/artist.js";
 import { getTypeFolderInfo, getOrCreateTypeFolder } from "../eagle/type-folder.js";
 import { saveToEagleSequential, getAllEagleItemsInFolder } from "../eagle/items.js";
 import { publishSaved } from "../shared/marking/saved-event-bus.js";
-import { waitForArtworkPersist, waitForFolderCountPersist } from "../eagle/save-poller.js";
 import { convertUgoiraToGifBlob, blobToDataURL } from "./ugoira/convert.js";
 import { getArtworkId } from "./id.js";
 import { getArtworkDetails } from "./details.js";
 import { createSaveProgressTask } from "../ui/save-progress/index.js";
 import { SAVE_STAGE } from "../ui/save-progress/types.js";
 
-// 保存当前作品到 Eagle
-export async function saveCurrentArtwork() {
+/**
+ * 将 batch 进度任务适配为单作品保存所需的进度接口。
+ * FETCHING/FOLDER/CONVERTING 阶段合并到同一 batch toast（不新增 toast）；
+ * UPLOADING 阶段双轨进度转发到 batch task；complete/fail/abort 由 batch 循环统一控制，此处为 no-op。
+ * @param {import('../ui/save-progress/index.js').createBatchSaveProgressTask extends (...a:any)=>infer R ? R : any} batchTask
+ * @param {string} artworkId
+ * @param {AbortSignal} signal
+ */
+function createBatchWorkProgressAdapter(batchTask, artworkId, signal) {
+    return {
+        signal: signal ?? batchTask.signal,
+        reportStage(stage, { current, total } = {}) {
+            if (stage === SAVE_STAGE.UPLOADING && total !== undefined) {
+                batchTask.reportSubmitProgress({ current: current ?? 0, total });
+                batchTask.reportEagleProgress({ current: 0, total });
+            }
+        },
+        updateArtworkInfo({ title, pageCount }) {
+            batchTask.beginWork({ artworkId, title, pageCount: pageCount ?? 1 });
+        },
+        reportFrameProgress() {},
+        reportSubmitProgress(p) {
+            batchTask.reportSubmitProgress(p);
+        },
+        reportEagleProgress(p) {
+            batchTask.reportEagleProgress(p);
+        },
+        complete() {},
+        fail() {},
+        abort() {},
+    };
+}
+
+/**
+ * 按作品 ID 保存到 Eagle（单作品保存核心）。
+ * @param {string} artworkId
+ * @param {{ task?: object, signal?: AbortSignal, openSavedArtwork?: boolean }} [options]
+ * @returns {Promise<{ folderId: string, itemId: string, pageCount: number }>}
+ */
+export async function saveArtworkById(artworkId, options = {}) {
+    const { task: externalTask, signal: externalSignal, openSavedArtwork } = options;
+    const isBatch = !!externalTask;
+
     const folderId = getFolderId();
     const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : "未设置 Pixiv 文件夹 ID";
 
-    const eagleStatus = await checkEagle();
-    if (!eagleStatus.running) {
-        showMessage(`${folderInfo}\nEagle 未启动，请先启动 Eagle 应用！`, true);
-        return;
-    }
+    const progress = isBatch
+        ? createBatchWorkProgressAdapter(externalTask, artworkId, externalSignal)
+        : createSaveProgressTask({ artworkId, title: "加载中…", pageCount: 1 });
 
-    const artworkId = getArtworkId();
-    if (!artworkId) {
-        showMessage("无法获取作品 ID", true);
-        return;
-    }
+    const signal = externalSignal ?? externalTask?.signal ?? progress.signal;
+    const shouldOpen = openSavedArtwork ?? !isBatch;
 
-    let task;
     try {
-        task = createSaveProgressTask({
-            artworkId,
-            title: "加载中…",
-            pageCount: 1,
-        });
-        task.reportStage(SAVE_STAGE.FETCHING, { current: 0, total: 1 });
+        progress.reportStage(SAVE_STAGE.FETCHING, { current: 0, total: 1 });
 
         const details = await getArtworkDetails(artworkId);
-        task.updateArtworkInfo({ title: details.illustTitle, pageCount: details.pageCount });
-        task.reportStage(SAVE_STAGE.FETCHING, { current: 1, total: 1 });
+        progress.updateArtworkInfo({ title: details.illustTitle, pageCount: details.pageCount });
+        progress.reportStage(SAVE_STAGE.FETCHING, { current: 1, total: 1 });
 
-        task.reportStage(SAVE_STAGE.FOLDER, { current: 0, total: 1 });
+        progress.reportStage(SAVE_STAGE.FOLDER, { current: 0, total: 1 });
 
         const artistFolder = await getArtistFolder(folderId, details.userId, details.userName);
         let targetFolderId = artistFolder.id;
@@ -80,61 +109,41 @@ export async function saveCurrentArtwork() {
             targetFolderId = await createEagleFolder(details.illustTitle, targetFolderId, artworkId);
         }
 
-        task.reportStage(SAVE_STAGE.FOLDER, { current: 1, total: 1 });
+        progress.reportStage(SAVE_STAGE.FOLDER, { current: 1, total: 1 });
 
         let imageUrls = details.originalUrls;
         if (details.illustType === 2) {
-            task.reportStage(SAVE_STAGE.CONVERTING, { current: 0, total: 1 });
+            progress.reportStage(SAVE_STAGE.CONVERTING, { current: 0, total: 1 });
             const gifBlob = await convertUgoiraToGifBlob(artworkId, {
-                signal: task.signal,
+                signal,
                 onFrameProgress: ({ current, total }) => {
-                    task.reportStage(SAVE_STAGE.CONVERTING, { current, total });
-                    task.reportFrameProgress({ current, total });
+                    progress.reportStage(SAVE_STAGE.CONVERTING, { current, total });
+                    progress.reportFrameProgress({ current, total });
                 },
             });
-            task.reportStage(SAVE_STAGE.CONVERTING, { current: 1, total: 1 });
+            progress.reportStage(SAVE_STAGE.CONVERTING, { current: 1, total: 1 });
             imageUrls = [await blobToDataURL(gifBlob)];
         }
 
         const pageTotal = imageUrls.length;
 
-        // 多页：上传前在目标文件夹采集 baseline（不复用会话缓存）；单页用 isArtworkSavedInEagle 确认
         let baselineCount = 0;
         if (pageTotal > 1) {
             const baselineItems = await getAllEagleItemsInFolder(targetFolderId);
             baselineCount = baselineItems.length;
         }
 
-        task.reportStage(SAVE_STAGE.UPLOADING, { current: 0, total: pageTotal });
-
-        const waitForPersist = ({ pageIndex, pageTotal: pt, baselineCount: base, signal, onEagleProgress }) => {
-            if (pt === 1) {
-                return waitForArtworkPersist({
-                    artworkId,
-                    folderId: targetFolderId,
-                    signal,
-                    onProgress: () => onEagleProgress?.({ current: 1, total: 1 }),
-                });
-            }
-            return waitForFolderCountPersist({
-                folderId: targetFolderId,
-                baselineCount: base,
-                target: pageIndex + 1,
-                signal,
-                onProgress: (persisted) => onEagleProgress?.({ current: Math.min(persisted, pt), total: pt }),
-            });
-        };
+        progress.reportStage(SAVE_STAGE.UPLOADING, { current: 0, total: pageTotal });
 
         const { itemId } = await saveToEagleSequential(imageUrls, targetFolderId, details, artworkId, {
-            signal: task.signal,
+            signal,
             baselineCount,
             onSubmitProgress: ({ current, total }) => {
-                task.reportSubmitProgress({ current, total });
+                progress.reportSubmitProgress({ current, total });
             },
             onEagleProgress: ({ current, total }) => {
-                task.reportEagleProgress({ current, total });
+                progress.reportEagleProgress({ current, total });
             },
-            waitForPersist,
         });
 
         const kind = details.illustType === 1 && details.seriesNavData ? "manga-chapter" : "artwork";
@@ -146,15 +155,46 @@ export async function saveCurrentArtwork() {
             itemId,
             savedAt: Date.now(),
         });
-        task.complete({ folderId: targetFolderId, itemId, pageCount: pageTotal, openSavedArtwork: true });
+
+        if (!isBatch) {
+            progress.complete({ folderId: targetFolderId, itemId, pageCount: pageTotal, openSavedArtwork: shouldOpen });
+        }
+
+        return { folderId: targetFolderId, itemId, pageCount: pageTotal };
     } catch (error) {
         err(error);
         if (error.name === "AbortError") {
-            if (!task.signal.aborted) task.abort();
+            if (!isBatch && !progress.signal.aborted) progress.abort();
             throw error;
         }
-        const msg = error.message || "保存失败";
-        task.fail(`${folderInfo}\n${msg}`.replace(/\n/g, " "));
+        if (!isBatch) {
+            const msg = error.message || "保存失败";
+            progress.fail(`${folderInfo}\n${msg}`.replace(/\n/g, " "));
+        }
         throw error;
+    }
+}
+
+// 保存当前作品到 Eagle（详情页薄包装：前置校验 + 打开已保存作品）
+export async function saveCurrentArtwork() {
+    const folderId = getFolderId();
+    const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : "未设置 Pixiv 文件夹 ID";
+
+    const eagleStatus = await checkEagle();
+    if (!eagleStatus.running) {
+        showMessage(`${folderInfo}\nEagle 未启动，请先启动 Eagle 应用！`, true);
+        return;
+    }
+
+    const artworkId = getArtworkId();
+    if (!artworkId) {
+        showMessage("无法获取作品 ID", true);
+        return;
+    }
+
+    try {
+        await saveArtworkById(artworkId, { openSavedArtwork: true });
+    } catch (error) {
+        // 错误已由 saveArtworkById 内部经 progress.fail 呈现，此处静默避免未捕获 promise
     }
 }
