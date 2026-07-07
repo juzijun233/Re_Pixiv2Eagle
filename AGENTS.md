@@ -124,7 +124,8 @@ Skill 提供工作流与项目模式；领域细节仍以 `.cursor/rules/*.mdc` 
 ## 注意事项
 
 - Cursor 通过根目录 `.cursorignore` 引用 `.gitignore`（`@.gitignore`），Agent 索引与读取时会一并排除 `node_modules/`、`dist/` 等被 git 忽略的路径；新增需排除目录时改 `.gitignore` 即可。
-- `docs/superpowers/` 为本地 Agent 规划草稿，已列入 `.gitignore`，勿提交。
+- `docs/superpowers/`、`docs/TODO.md` 为本地 Agent 工作流/跟进清单，已列入 `.gitignore`，勿提交。
+- `.cursorignore` 为本地 Cursor 索引扩展（引用 `@.gitignore`），不提交。
 - 开发基线为 **`main`**（esbuild 模块化已合入；远程可能仍保留旧单文件 `master` 历史）。
 - `src/header.txt` 中的 `[IP_ADDRESS]` 是字面占位符——构建脚本**不会**替换它，会原样输出到 `dist/RePixiv2Eagle.js`（影响 `@version` 与一条 `@connect`）。改版本号 / 新增 `@connect` 域名请直接编辑 `src/header.txt`。
 - 源码已由单文件拆分为 ES 模块树；esbuild 仍产出单 IIFE 产物，用户可见行为应与拆分前等价。
@@ -147,12 +148,12 @@ Skill 提供工作流与项目模式；领域细节仍以 `.cursor/rules/*.mdc` 
 - 仓库 fork 自 [nekoday/Pixiv2Eagle](https://github.com/nekoday/Pixiv2Eagle)；GitHub 为 `https://github.com/juzijun233/Re_Pixiv2Eagle`（仓库名带下划线）。`origin` 为 `git@github.com:juzijun233/Re_Pixiv2Eagle.git`，`upstream` 仍指向 nekoday。
 - 构建产物为 `dist/RePixiv2Eagle.js`；发行包为 `Releases/{version}/RePixiv2Eagle.js` + `CHANGELOG.md`（`Releases/` 已 git 忽略）。
 - Tampermonkey `@name` 当前为 `Re_Pixiv2Eagle`；文件名与用户可见脚本品牌倾向 `RePixiv2Eagle`（无下划线）。
-- 网页内设置 UI 在 `src/ui/control-panel/`（含 base64 配置导入/导出）；保存进度 toast 在 `src/ui/save-progress/`。
+- 网页内 UI：`src/ui/control-panel/`（设置与 base64 配置导入/导出）、`src/ui/save-progress/`（双轨 toast，由 `save-pipeline.js`/`save-poller.js` 驱动）、`src/ui/theme.js`（浅色/深色/跟随系统）。
 - 已保存标记动态更新由 `src/shared/marking/saved-event-bus.js` 协调（BroadcastChannel + GM 存储，联动详情页/推荐区/作者列表等）。
 - 漫画/小说系列分属 `manga/series/`、`novel/series/`，无顶层 `series/`。
 - `tampermonkey/storage.js` 缓存 Eagle 索引；`tampermonkey/setting.js` 持久化用户设置。
-- `eagle/artist-matcher.js` 打破 artist↔folder 循环依赖。
-- UI 主题（浅色/深色/跟随系统）在 `src/ui/theme.js`，设置项经控制面板暴露。
-- `docs/TODO.md` 记录已批准 spec 外、非当前迭代的跟进项（如 recommendation-mark 死代码清理）。
+- `.cursor/rules/` 与 `.cursor/skills/` 已纳入版本库；`docs/rules/` 保留为领域 `.mdc` 的 Markdown 备份（`agents-skills` 仅 `.mdc`）。
+- `docs/TODO.md` 为本地跟进清单（已 git 忽略），记录非当前迭代项。
 - 作者插画页单页批量保存在 `artist-list/batch-save-page.js` + `ui-batch-toolbar.js`（`bindArtistIllustListPageBatchSave`）；`saved-context.js` 与 marking 共享已保存判定；`saveArtworkById` 在 `artwork/save.js`；仅 `/users/{id}/illustrations`，与画师全量批量命名区分。
 - 推荐区「相关作品」监控在 `src/artwork/ui/recommendation-mark.js`：bind 后立即首扫、5min lifecycle cleanup + re-arm、root 60s 有限重试。
+- 离线已保存缓存统计在 `src/eagle/index-cache.js` 与 `src/eagle/sync.js` 中已兼容 `saveByType` 开/关两种目录结构，并通过 item URL 语义判定减少小说/漫画被误计为插画。
