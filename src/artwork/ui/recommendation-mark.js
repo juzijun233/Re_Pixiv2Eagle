@@ -16,6 +16,7 @@ import {
     waitForRecommendationItems,
 } from "../../shared/marking/resolve-recommendation-items.js";
 import { ensureEagleIndex } from "../../eagle/index-cache.js";
+import { loadFromGMIfNeeded } from "../../shared/marking/saved-lookup.js";
 import { getAllEagleItemsInFolder } from "../../eagle/items.js";
 import { getArtistInfoFromDOM, getArtistInfoFromArtwork } from "../artist-info.js";
 import {
@@ -326,6 +327,7 @@ export async function markSavedInRecommendationArea() {
 
         const isStale = () => location.href !== initUrl;
 
+        loadFromGMIfNeeded();
         await ensureEagleIndex();
         if (isStale()) return;
 

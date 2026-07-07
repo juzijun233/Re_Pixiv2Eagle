@@ -11,6 +11,7 @@ import { getFolderId } from "../../tampermonkey/setting.js";
 import { findArtistFolder } from "../../eagle/artist.js";
 import { findNovelSeriesFolder } from "./find-series-folder.js";
 import { waitForElement } from "../../ui/dom.js";
+import { loadFromGMIfNeeded, listSavedByUser } from "../../shared/marking/saved-lookup.js";
 
 export async function markSavedInNovelSeries() {
     const listContainer = await waitForElement(NOVEL_SERIES_LIST_SELECTOR);
@@ -26,15 +27,25 @@ export async function markSavedInNovelSeries() {
     const authorId = authorContainer.getAttribute("data-gtm-value") || authorContainer.getAttribute("data-gtm-user-id");
     if (!authorId) return;
 
-    const pixivFolderId = getFolderId();
-    const artistFolder = await findArtistFolder(pixivFolderId, authorId);
-    if (!artistFolder) return;
+    // 离线基线：缓存中该作者全部 novel id
+    loadFromGMIfNeeded();
+    const savedChapterIds = new Set(listSavedByUser(authorId, "novel").map((e) => e.id));
 
-    const seriesFolder = findNovelSeriesFolder(artistFolder, seriesId);
-    if (!seriesFolder) return;
+    // 在线增强：系列文件夹子节点 description（章节 novelId）
+    try {
+        const pixivFolderId = getFolderId();
+        const artistFolder = await findArtistFolder(pixivFolderId, authorId);
+        if (artistFolder) {
+            const seriesFolder = findNovelSeriesFolder(artistFolder, seriesId);
+            if (seriesFolder) {
+                for (const c of seriesFolder.children || []) savedChapterIds.add(c.description);
+            }
+        }
+    } catch (e) {
+        // Eagle 离线：仅用缓存基线
+    }
 
-    const chapterFolders = seriesFolder.children || [];
-    const savedChapterIds = new Set(chapterFolders.map((c) => c.description));
+    if (savedChapterIds.size === 0) return;
 
     const lis = listContainer.querySelectorAll("li");
     for (const li of lis) {

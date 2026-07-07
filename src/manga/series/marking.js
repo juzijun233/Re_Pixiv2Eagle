@@ -5,6 +5,7 @@ import { findArtistFolder } from "../../eagle/artist.js";
 import { getAllEagleItemsInFolder } from "../../eagle/items.js";
 import { findMangaSeriesFolderInArtistTree } from "./folder.js";
 import { addUpdateSeriesButton } from "./ui-update-button.js";
+import { loadFromGMIfNeeded, listSavedByUser } from "../../shared/marking/saved-lookup.js";
 
 /** markSavedInArtistList 中 /series/ 页面分支：扩展 urlSet 与 folderDescSet */
 export async function enrichMarkingContextForMangaSeriesPage({
@@ -16,6 +17,12 @@ export async function enrichMarkingContextForMangaSeriesPage({
     log,
 }) {
     addUpdateSeriesButton();
+
+    // 离线基线：把缓存中该画师的 manga-chapter / artwork id 注入 folderDescSet
+    loadFromGMIfNeeded();
+    for (const e of listSavedByUser(artistId)) {
+        if (e.kind === "manga-chapter" || e.kind === "artwork") folderDescSet.add(String(e.id));
+    }
 
     log("检测到系列页面，开始处理系列文件夹");
     try {

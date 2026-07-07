@@ -9,6 +9,7 @@ import {
 } from "../shared/marking/resolve-thumbnail-anchor.js";
 import { buildArtistListSavedContext } from "./saved-context.js";
 import { enrichMarkingContextForMangaSeriesPage } from "../manga/series/marking.js";
+import { loadFromGMIfNeeded, listSavedByUser } from "../shared/marking/saved-lookup.js";
 
 let markSavedDebounceTimer = null;
 let currentGalleryObserver = null;
@@ -108,17 +109,33 @@ export async function markSavedInArtistList() {
         log("解析到 artistId:", artistId);
 
         const pixivFolderId = getFolderId();
-        const savedContext = await buildArtistListSavedContext(artistId, pixivFolderId);
-        if (!savedContext) {
-            log("未找到对应的画师文件夹，跳过标注（pixivFolderId:", pixivFolderId, "）");
+
+        // 离线基线：saved-lookup 缓存的该画师全部已保存 id（artwork/manga-chapter/novel）
+        loadFromGMIfNeeded();
+        const savedIdSet = new Set(listSavedByUser(artistId).map((e) => e.id));
+
+        // 在线增强：拉取画师文件夹 items/子文件夹描述（Eagle 离线时为 null）
+        let savedContext = null;
+        try {
+            savedContext = await buildArtistListSavedContext(artistId, pixivFolderId);
+        } catch (e) {
+            log("在线上下文构建失败（可能 Eagle 离线），使用缓存基线:", e && e.message);
+        }
+
+        if (!savedContext && savedIdSet.size === 0) {
+            log("无缓存基线且无在线上下文，跳过标注（pixivFolderId:", pixivFolderId, "）");
             return;
         }
 
-        const { urlSet, folderDescSet, folderDescMap } = savedContext;
+        const urlSet = savedContext ? savedContext.urlSet : new Set();
+        const folderDescSet = savedContext ? savedContext.folderDescSet : new Set();
+        const folderDescMap = savedContext ? savedContext.folderDescMap : {};
         log(
-            "已构建已保存上下文：items url 数量",
+            "已保存基线：缓存 id",
+            savedIdSet.size,
+            "items url",
             urlSet.size,
-            "子文件夹描述数量",
+            "子文件夹描述",
             folderDescSet.size
         );
 
@@ -161,7 +178,10 @@ export async function markSavedInArtistList() {
             target.dataset.eagleChecked = "1";
 
             const artworkUrl = `https://www.pixiv.net/artworks/${id}`;
-            if (urlSet.has(artworkUrl)) {
+            if (savedIdSet.has(String(id))) {
+                log("作品", id, "匹配 (cache)");
+                insertBadgeToContainer(target, { artworkId: id, artworkUrl, matchedBy: "cache" });
+            } else if (urlSet.has(artworkUrl)) {
                 log("作品", id, "匹配 (itemUrl)");
                 insertBadgeToContainer(target, { artworkId: id, artworkUrl, matchedBy: "itemUrl" });
             } else if (folderDescSet.has(String(id))) {
@@ -201,7 +221,9 @@ export async function markSavedInArtistList() {
                         target.dataset.eagleChecked = "1"; // 标记为已检查
 
                         const artworkUrl = `https://www.pixiv.net/artworks/${pid}`;
-                        if (urlSet.has(artworkUrl)) {
+                        if (savedIdSet.has(String(pid))) {
+                            insertBadgeToContainer(target, { artworkId: pid, artworkUrl, matchedBy: "cache" });
+                        } else if (urlSet.has(artworkUrl)) {
                             insertBadgeToContainer(target, { artworkId: pid, artworkUrl, matchedBy: "itemUrl" });
                         } else if (folderDescSet.has(String(pid))) {
                             insertBadgeToContainer(target, { artworkId: pid, artworkUrl, matchedBy: "folderDesc" });

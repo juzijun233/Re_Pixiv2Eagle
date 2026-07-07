@@ -16,6 +16,7 @@ import { getArtworkId } from "../id.js";
 import { saveCurrentArtwork } from "../save.js";
 import { openArtistFolderFromArtworkPage } from "../artist-info.js";
 import { addMoveToSubfolderButton } from "./move-subfolder.js";
+import { loadFromGMIfNeeded, isSaved } from "../../shared/marking/saved-lookup.js";
 
 export async function updateSaveButtonIfSaved(saveButton) {
     async function attachOpenArtworkButton(savedInfo) {
@@ -51,12 +52,18 @@ export async function updateSaveButtonIfSaved(saveButton) {
     const artworkId = getArtworkId();
     if (!artworkId) return;
 
+    // 离线基线：缓存命中即显示已保存（artwork 或 manga-chapter），不渲染打开按钮（R11）
+    loadFromGMIfNeeded();
+    const cachedSaved = isSaved("artwork", artworkId) || isSaved("manga-chapter", artworkId);
+    if (cachedSaved) {
+        saveButton.textContent = "✅ 此作品已保存";
+    }
+
     try {
         const eagleStatus = await checkEagle();
         if (!eagleStatus.running) return;
 
         const savedInfo = await findSavedFolderForArtwork(artworkId);
-
         if (savedInfo && savedInfo.folder) {
             saveButton.textContent = "✅ 此作品已保存";
             await attachOpenArtworkButton(savedInfo);

@@ -12,6 +12,7 @@ import {
     resolveThumbnailAnchor,
 } from "../shared/marking/resolve-thumbnail-anchor.js";
 import { buildArtistListSavedContext, isArtworkSavedInContext } from "./saved-context.js";
+import { loadFromGMIfNeeded, isSaved } from "../shared/marking/saved-lookup.js";
 import {
     BATCH_ENTRY_BUTTON_ID,
     injectArtistIllustPageBatchButton,
@@ -79,7 +80,8 @@ async function scanArtistIllustListItems() {
 function isIllustSavedOnArtistList(item) {
     const { pid, anchor } = item;
     if (anchor.dataset.eagleSaved === "1" || anchor.querySelector(".eagle-saved-badge")) return true;
-    return isArtworkSavedInContext(pid, state.savedContext);
+    if (isArtworkSavedInContext(pid, state.savedContext)) return true;
+    return isSaved("artwork", pid);
 }
 
 // ---- 复选框 ----
@@ -362,7 +364,13 @@ async function enterArtistIllustListBatchMode() {
         document.body.dataset.p2eBatchMode = "illust-page";
 
         const artistId = getArtistIdFromPath();
-        state.savedContext = artistId ? await buildArtistListSavedContext(artistId) : null;
+        loadFromGMIfNeeded();
+        try {
+            state.savedContext = artistId ? await buildArtistListSavedContext(artistId) : null;
+        } catch (e) {
+            dbg("batch-save-page: 在线上下文构建失败，退回缓存判定:", e && e.message);
+            state.savedContext = null;
+        }
         if (gen !== enterGeneration) return;
 
         const items = await scanArtistIllustListItems();

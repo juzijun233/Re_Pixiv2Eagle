@@ -11,10 +11,18 @@ import { getTypeFolderInfo } from "../../eagle/type-folder.js";
 import { EAGLE_SAVE_BUTTON_ID } from "../../config/constants.js";
 import { getNovelId } from "../id.js";
 import { getNovelDetails } from "../details.js";
+import { loadFromGMIfNeeded, isSaved } from "../../shared/marking/saved-lookup.js";
 
 export async function updateNovelSaveButtonIfSaved(saveButton) {
     const novelId = getNovelId();
     if (!novelId) return;
+
+    // 离线基线：缓存命中即显示「已保存」，不绑定 openEagleFolder（R11）
+    loadFromGMIfNeeded();
+    if (isSaved("novel", novelId)) {
+        saveButton.textContent = "已保存";
+        saveButton.classList.add("p2e-btn--saved");
+    }
 
     try {
         const details = await getNovelDetails(novelId);
