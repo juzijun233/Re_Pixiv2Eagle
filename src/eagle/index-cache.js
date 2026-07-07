@@ -73,6 +73,29 @@ export async function buildArtistIndexFromApi(pixivFolderId) {
     const root = findFolder(folderList.data, pixivFolderId);
     if (!root || !root.children) return index;
 
+    const getFolderItems = async (folderId) => {
+        const params = new URLSearchParams({ folders: folderId, limit: "20", offset: "0" });
+        const data = await gmFetch(`http://localhost:41595/api/item/list?${params.toString()}`);
+        if (!data || !data.status) return [];
+        if (Array.isArray(data.data)) return data.data;
+        if (Array.isArray(data.data?.items)) return data.data.items;
+        return [];
+    };
+
+    const inferRootNumericFolderKind = async (folderId) => {
+        try {
+            const items = await getFolderItems(folderId);
+            for (const item of items) {
+                const pageUrl = String(item?.url || item?.website || "").trim();
+                if (/^https?:\/\/www\.pixiv\.net\/novel\/show\.php\?id=\d+/.test(pageUrl)) return "novel";
+                if (/^https?:\/\/www\.pixiv\.net\/artworks\/\d+/.test(pageUrl)) return "artwork";
+            }
+        } catch (e) {
+            warn("推断根层数字目录类型失败:", e);
+        }
+        return "unknown";
+    };
+
     for (const artistFolder of root.children) {
         const desc = artistFolder.description || "";
         const match = desc.match(/pid\s*=\s*(\d+)/);
@@ -80,18 +103,34 @@ export async function buildArtistIndexFromApi(pixivFolderId) {
         const artistUid = match[1];
         const pids = new Set();
 
-        const traverse = (nodes) => {
+        const isMangaSeriesUrl = (text) => /^https?:\/\/www\.pixiv\.net\/user\/\d+\/series\/\d+\/?$/.test(text);
+        const isNovelSeriesUrl = (text) => /^https?:\/\/www\.pixiv\.net\/novel\/series\/\d+\/?$/.test(text);
+
+        const traverse = async (nodes, inArtworkBranch = true, depth = 0) => {
             for (const node of nodes) {
                 const subDesc = (node.description || "").trim();
-                if (subDesc && /^\d+$/.test(subDesc)) {
-                    pids.add(subDesc);
+                let nextInArtworkBranch = inArtworkBranch;
+                if (subDesc === "manga" || subDesc === "novels" || isMangaSeriesUrl(subDesc) || isNovelSeriesUrl(subDesc)) {
+                    nextInArtworkBranch = false;
+                } else if (subDesc === "illustrations") {
+                    nextInArtworkBranch = true;
+                }
+
+                if (nextInArtworkBranch && subDesc && /^\d+$/.test(subDesc)) {
+                    // saveByType 关闭时，画师根下数字目录可能是小说章节；需要语义判定避免误计入 artwork。
+                    if (depth === 0) {
+                        const inferredKind = await inferRootNumericFolderKind(node.id);
+                        if (inferredKind === "artwork") pids.add(subDesc);
+                    } else {
+                        pids.add(subDesc);
+                    }
                 }
                 if (node.children && node.children.length > 0) {
-                    traverse(node.children);
+                    await traverse(node.children, nextInArtworkBranch, depth + 1);
                 }
             }
         };
-        if (artistFolder.children) traverse(artistFolder.children);
+        if (artistFolder.children) await traverse(artistFolder.children);
         index.set(artistUid, { id: artistFolder.id, pids });
     }
     dbg(`全局 Eagle 索引构建完成，包含 ${index.size} 位画师`);
