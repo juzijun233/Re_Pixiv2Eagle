@@ -1,6 +1,6 @@
 "use strict";
 
-import { patchEagleIndex } from "../../eagle/index-cache.js";
+import { loadFromGMIfNeeded, upsertEntry, persistToGM } from "./saved-lookup.js";
 import { handleSavedEventForArtworkDetail } from "../../artwork/ui/save-button.js";
 import { handleSavedEventForRecommendation } from "../../artwork/ui/recommendation-mark.js";
 import { handleSavedEventForArtistList } from "../../artist-list/marking.js";
@@ -135,7 +135,7 @@ export function subscribeSaved(listener) {
 
 /**
  * 保存落盘确认后调用。
- * 顺序：补 savedAt → patchEagleIndex → GM 环形缓冲 → BroadcastChannel → CustomEvent
+ * 顺序：补 savedAt → saved-lookup v2 持久化 → GM 环形缓冲 → BroadcastChannel → CustomEvent
  * @param {SavedPayload} payload
  */
 export function publishSaved(payload) {
@@ -145,12 +145,16 @@ export function publishSaved(payload) {
         normalized.savedAt = Date.now();
     }
 
-    if (normalized.userId && normalized.id) {
-        patchEagleIndex({
+    if (normalized.id) {
+        loadFromGMIfNeeded();
+        upsertEntry({
+            kind: normalized.kind,
+            id: normalized.id,
             userId: normalized.userId,
-            pid: normalized.id,
             folderId: normalized.folderId,
+            savedAt: normalized.savedAt,
         });
+        persistToGM();
     }
 
     pushRecentSave(normalized);
