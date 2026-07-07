@@ -15,4 +15,3 @@ export const PAGE_OBSERVER_TIMEOUT_MS     = 30000;  // handlePageChange 观察�
 export const PAGE_RETRY_INTERVAL_MS       = 500;    // handlePageChange 重试间隔（毫秒）
 export const PAGE_RETRY_MAX_COUNT         = 10;     // handlePageChange 最大重试次数
 export const NOVEL_IMAGE_DOWNLOAD_DELAY_MS = 500;  // 小说图片下载延迟（毫秒，避免浏览器拦截）
-export const INDEX_EXPIRE_TIME = 24 * 60 * 60 * 1000; // Eagle 索引缓存有效期（24 小时，毫秒）
