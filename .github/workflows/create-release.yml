@@ -16,7 +16,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: Pixiv.js
+          files: RePixiv2Eagle.js
           draft: false
           prerelease: false
           generate_release_notes: true
