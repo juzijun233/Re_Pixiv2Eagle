@@ -9,6 +9,7 @@ import { mountEagleFolderSection } from "./sections/eagle-folder.js";
 import { mountArtworkSaveSection } from "./sections/artwork-save.js";
 import { mountNovelSection } from "./sections/novel.js";
 import { mountRecommendationSection } from "./sections/recommendation.js";
+import { mountSavedCacheSection } from "./sections/saved-cache.js";
 import { mountAppearanceSection } from "./sections/appearance.js";
 import { mountAdvancedSection } from "./sections/advanced.js";
 import { mountConfigBackupSection } from "./sections/config-backup.js";
@@ -54,6 +55,7 @@ function openPanel() {
         mountArtworkSaveSection(body).render,
         mountNovelSection(body).render,
         mountRecommendationSection(body).render,
+        mountSavedCacheSection(body).render,
         mountAppearanceSection(body).render,
         mountAdvancedSection(body).render,
         mountConfigBackupSection(body).render,

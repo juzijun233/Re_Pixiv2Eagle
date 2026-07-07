@@ -14,7 +14,7 @@ export const STORAGE_KEYS = Object.freeze({
  * }} EagleIndexCacheV2
  */
 
-/** @returns {EagleIndexCacheV2 | { index?: object, expireTime?: number, pixivFolderId?: string } | null} */
+/** @returns {EagleIndexCacheV2 | object | null} Legacy v1 payload may lack `version`. */
 export function loadEagleIndexCache() {
     return GM_getValue(STORAGE_KEYS.EAGLE_INDEX, null);
 }

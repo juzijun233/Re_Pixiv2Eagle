@@ -21,7 +21,7 @@ import {
     forceRefreshEagleIndex,
 } from "./setting.js";
 import { checkEagle } from "../eagle/client.js";
-import { loadEagleIndexCache } from "./storage.js";
+import { getCacheStats } from "../shared/marking/saved-lookup.js";
 import { applyTheme } from "../ui/theme.js";
 
 /** @type {Set<(snapshot: ReturnType<typeof getSnapshot>) => void>} */
@@ -32,8 +32,8 @@ const DEFAULT_EAGLE_SNAPSHOT = {
     version: null,
     indexLoaded: false,
     indexArtistCount: 0,
-    indexCacheValid: false,
-    indexExpiresAt: null,
+    entryCount: 0,
+    lastSyncAt: null,
     indexState: "未构建",
 };
 
@@ -111,28 +111,19 @@ function utf8Base64Decode(base64) {
 }
 
 function buildEagleSnapshotSync(probe) {
-    const pixivFolderId = getFolderId();
+    const stats = getCacheStats();
     const memIndex = window.__pixiv2eagle_globalEagleIndex;
     const loadingPromise = window.__pixiv2eagle_eagleIndexLoadingPromise;
-    const cached = loadEagleIndexCache();
-    const now = Date.now();
-
-    let indexCacheValid = false;
-    let indexExpiresAt = null;
-    if (cached && cached.expireTime && cached.pixivFolderId === pixivFolderId && pixivFolderId) {
-        indexExpiresAt = cached.expireTime;
-        indexCacheValid = now < cached.expireTime;
-    }
 
     const indexLoaded = memIndex instanceof Map;
-    const indexArtistCount = indexLoaded ? memIndex.size : 0;
+    const indexArtistCount = indexLoaded ? memIndex.size : stats.artistCount;
 
     let indexState = "未构建";
     if (loadingPromise) {
         indexState = "构建中";
-    } else if (indexLoaded) {
+    } else if (indexLoaded && memIndex.size > 0) {
         indexState = "已加载";
-    } else if (indexCacheValid) {
+    } else if (stats.entryCount > 0) {
         indexState = "仅缓存";
     }
 
@@ -141,8 +132,8 @@ function buildEagleSnapshotSync(probe) {
         version: probe ? probe.version : cachedEagleSnapshot.version,
         indexLoaded,
         indexArtistCount,
-        indexCacheValid,
-        indexExpiresAt,
+        entryCount: stats.entryCount,
+        lastSyncAt: stats.lastSyncAt,
         indexState,
     };
 }

@@ -15,9 +15,8 @@ export function createStatusBar(container, { onRefreshEagle }) {
 
     let refreshTimer = null;
 
-    function formatExpire(ts) {
-        if (!ts) return "—";
-        if (Date.now() >= ts) return "已过期";
+    function formatSync(ts) {
+        if (!ts) return "从未";
         return new Date(ts).toLocaleString();
     }
 
@@ -30,8 +29,8 @@ export function createStatusBar(container, { onRefreshEagle }) {
             ["Pixiv 文件夹", snapshot.settings.pixivFolderId || "未设置"],
             ["索引", snapshot.eagle.indexState],
             ["画师数", String(snapshot.eagle.indexArtistCount)],
-            ["缓存", snapshot.eagle.indexCacheValid ? "有效" : "无效 / 已过期"],
-            ["缓存过期", formatExpire(snapshot.eagle.indexExpiresAt)],
+            ["缓存条目", String(snapshot.eagle.entryCount)],
+            ["上次同步", formatSync(snapshot.eagle.lastSyncAt)],
         ];
 
         for (const [label, value] of rows) {
