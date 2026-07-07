@@ -8,6 +8,8 @@ import { createMonitorConfig } from "./config/monitor.js";
 import { observeUrlChanges } from "./routing/observe-url.js";
 import { handlePageChange } from "./routing/handle-page.js";
 import { ensureEagleIndex } from "./eagle/index-cache.js";
+import { loadFromGMIfNeeded } from "./shared/marking/saved-lookup.js";
+import { maybePromptFolderMismatch } from "./ui/folder-mismatch-dialog.js";
 import { addButton } from "./artwork/ui/save-button.js";
 import { markSavedInRecommendationArea } from "./artwork/ui/recommendation-mark.js";
 import { addNovelButton } from "./novel/ui/save-button.js";
@@ -33,6 +35,8 @@ const monitorConfig = createMonitorConfig({
 try {
     dbg("脚本已启动，当前URL:", location.pathname);
 
+    loadFromGMIfNeeded();
+    maybePromptFolderMismatch();
     ensureEagleIndex();
 
     for (const monitorInfo of monitorConfig) {
