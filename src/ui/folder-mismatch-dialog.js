@@ -42,8 +42,13 @@ function showFolderMismatchDialog(info) {
     const syncBtn = mk("立即同步", "#0096fa", async () => {
         syncBtn.disabled = true;
         syncBtn.textContent = "同步中…";
-        await syncNow();
-        close();
+        const result = await syncNow();
+        if (result.ok) {
+            close();
+        } else {
+            syncBtn.disabled = false;
+            syncBtn.textContent = "立即同步";
+        }
     });
     // 选项 2：清除缓存
     const clearBtn = mk("清除缓存", "#e4405f", () => {

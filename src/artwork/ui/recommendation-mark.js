@@ -16,7 +16,7 @@ import {
     waitForRecommendationItems,
 } from "../../shared/marking/resolve-recommendation-items.js";
 import { ensureEagleIndex } from "../../eagle/index-cache.js";
-import { loadFromGMIfNeeded } from "../../shared/marking/saved-lookup.js";
+import { isSaved as isSavedInCache, loadFromGMIfNeeded } from "../../shared/marking/saved-lookup.js";
 import { getAllEagleItemsInFolder } from "../../eagle/items.js";
 import { getArtistInfoFromDOM, getArtistInfoFromArtwork } from "../artist-info.js";
 import {
@@ -404,20 +404,19 @@ export async function markSavedInRecommendationArea() {
             }
 
             const artistData = window.__pixiv2eagle_globalEagleIndex.get(uid);
+            const target = resolveThumbnailAnchor(li, { context: "rec" });
+            const savedMode = getFilterRecSavedMode();
             let isSaved = false;
 
-            if (!artistData) {
+            if (isSavedInCache("artwork", pid) || isSavedInCache("manga-chapter", pid)) {
+                isSaved = true;
+            } else if (!artistData) {
                 dbg(`作品 ${pid}: 画师 ${uid} 不在 Eagle 中 -> 未保存`);
                 applySavedFilter(li, { isSaved: false });
                 li.dataset.eagleChecked = "1";
                 pending.delete(li);
                 return;
-            }
-
-            const target = resolveThumbnailAnchor(li, { context: "rec" });
-            const savedMode = getFilterRecSavedMode();
-
-            if (artistData.pids.has(pid)) {
+            } else if (artistData.pids.has(pid)) {
                 isSaved = true;
             } else {
                 try {
@@ -504,14 +503,25 @@ export async function markSavedInRecommendationArea() {
                 return;
             }
 
+            const target = resolveThumbnailAnchor(a, { context: "sidebar" });
+
+            if (isSavedInCache("artwork", pid) || isSavedInCache("manga-chapter", pid)) {
+                if (insertBadge(target)) {
+                    a.dataset.eagleChecked = "1";
+                    pending.delete(a);
+                    dbg(`侧栏作品 ${pid}: 已保存 (离线缓存) -> 标记成功`);
+                } else {
+                    enqueuePending(a, "sidebar");
+                }
+                return;
+            }
+
             const artistData = window.__pixiv2eagle_globalEagleIndex.get(uid);
             if (!artistData) {
                 a.dataset.eagleChecked = "1";
                 pending.delete(a);
                 return;
             }
-
-            const target = resolveThumbnailAnchor(a, { context: "sidebar" });
 
             if (artistData.pids.has(pid)) {
                 if (insertBadge(target)) {
