@@ -8,8 +8,9 @@ on:
         required: true
         type: string
       release_notes:
-        description: "Paste current version changelog section"
-        required: true
+        description: "Paste current version changelog section (optional; leave empty for no notes)"
+        required: false
+        default: ""
         type: string
       prerelease:
         description: "Mark as pre-release"
